@@ -50,7 +50,10 @@
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Auto-connect" android:textColor="@color/black" android:textStyle="bold" android:textSize="15sp" />
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="Reconnect to your last server when FastVPN opens" android:textColor="@color/gray" android:textSize="12sp" />
                     </LinearLayout>
-                    <Switch android:id="@+id/switchAutoConnect" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchAutoConnect"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -100,5 +103,7 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.button.MaterialButton android:id="@+id/buttonSplitTunneling" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="16dp" android:text="Split tunneling  •  Choose apps" android:textAllCaps="false" style="@style/Widget.MaterialComponents.Button.OutlinedButton" app:cornerRadius="16dp" />
+
+        <com.google.android.material.button.MaterialButton android:id="@+id/buttonPrivacyPolicy" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="12dp" android:text="Privacy Policy &amp; Terms" android:textAllCaps="false" style="@style/Widget.MaterialComponents.Button.TextButton" app:cornerRadius="16dp" />
     </LinearLayout>
 </ScrollView>

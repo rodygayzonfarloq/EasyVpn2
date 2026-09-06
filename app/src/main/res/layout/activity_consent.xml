@@ -47,7 +47,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="40dp"
                 android:fontFamily="sans-serif-medium"
-                android:text="FastVPN"
+                android:text="Fast VPN"
                 android:textColor="@color/white"
                 android:textSize="28sp"
                 android:textStyle="bold" />
