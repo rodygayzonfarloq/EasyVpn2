@@ -114,7 +114,16 @@ class VpnTunnelManager(private val context: Context) {
 
             val peerBuilder = Peer.Builder()
                 .setPublicKey(peerPublicKey)
-                .parseAllowedIPs("0.0.0.0/0")
+                // Routing BOTH families through the tunnel is what actually prevents an
+                // IPv6 leak. Android's VpnService only captures traffic for address
+                // families it's given a route for -- "0.0.0.0/0" alone only claims IPv4,
+                // so on any dual-stack network (most mobile/Wi-Fi networks today) IPv6
+                // traffic would silently bypass the tunnel entirely and go out over the
+                // real interface with the device's real IPv6 address, unencrypted. Since
+                // this WireGuard server/config here doesn't hand out an IPv6 address,
+                // adding the "::/0" route just makes IPv6 traffic route into the tunnel
+                // and get dropped there instead of leaking -- a safe fail-closed result.
+                .parseAllowedIPs("0.0.0.0/0, ::/0")
                 .parseEndpoint(server.endpoint)
                 .setPersistentKeepalive(25)
 
