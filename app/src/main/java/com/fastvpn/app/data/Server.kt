@@ -13,19 +13,19 @@ package com.fastvpn.app.data
  * dns            -> DNS to use inside tunnel, e.g. "1.1.1.1"
  */
 data class Server(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    val name: String = "",
-    val countryName: String = "",
-    val countryCode: String = "US",   // ISO 3166-1 alpha-2, used to render flag emoji
-    val city: String = "",
-    val endpointHost: String = "",
-    val endpointPort: Int = 51820,
-    val serverPublicKey: String = "",
-    val presharedKey: String = "",
-    val clientAddress: String = "10.8.0.0/24",
-    val dns: String = "1.1.1.1",
-    val maxRecommendedUsers: Int = 40, // rough capacity hint for a 1GB RAM VPS
-    val enabled: Boolean = true,
+    var id: String = java.util.UUID.randomUUID().toString(),
+    var name: String = "",
+    var countryName: String = "",
+    var countryCode: String = "US",   // ISO 3166-1 alpha-2, used to render flag emoji
+    var city: String = "",
+    var endpointHost: String = "",
+    var endpointPort: Int = 51820,
+    var serverPublicKey: String = "",
+    var presharedKey: String = "",
+    var clientAddress: String = "10.8.0.0/24",
+    var dns: String = "1.1.1.1",
+    var maxRecommendedUsers: Int = 40, // rough capacity hint for a 1GB RAM VPS
+    var enabled: Boolean = true,
 
     // runtime-only fields (not persisted, filled in at runtime)
     @Transient var pingMs: Int = -1,   // -1 = not tested yet, -2 = unreachable

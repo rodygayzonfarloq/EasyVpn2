@@ -109,9 +109,9 @@ build doesn't break either. **But**:
    ~4-line config — it gets a real certificate automatically and keeps it
    renewed forever, no manual work.
 4. Update `DEFAULT_BACKEND_API_URL` to `https://your-domain.com`.
-5. For production with a real domain, you can optionally remove
-   `app/src/debug/res/xml/network_security_config_debug.xml` — the cleartext
-   exception is only needed for debug builds during testing, not production.
+5. Delete `app/src/main/res/xml/network_security_config.xml` and remove the
+   `android:networkSecurityConfig` line from `AndroidManifest.xml` — the
+   cleartext exception is no longer needed once you're on HTTPS.
 
 Tell me when you're ready and I'll write the exact Caddy config for your domain.
 

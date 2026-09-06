@@ -57,14 +57,11 @@
              this service class name to establish the VPN interface. This is not something
              Gradle merges in automatically from the dependency; it must be declared here
              with this exact name, or the tunnel will never actually connect even though
-             the app builds and runs fine otherwise.
-             
-             foregroundServiceType="specialUse" for Android 14+ (API 34) compliance. -->
+             the app builds and runs fine otherwise. -->
         <service
             android:name="com.wireguard.android.backend.GoBackend$VpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
