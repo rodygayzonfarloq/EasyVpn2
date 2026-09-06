@@ -56,6 +56,7 @@ class MainActivity : AppCompatActivity() {
     private var statsJob: Job? = null
     private var refreshJob: Job? = null
     private var connectionFlowActive = false
+    private var connectionStartedAt: Long = 0L // Persist across Activity recreations
 
     private val vpnPermissionLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -80,6 +81,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         applyEdgeToEdgeInsets(binding.root)
         setSupportActionBar(binding.toolbar)
+
+        // Restore connection timer if Activity was recreated
+        savedInstanceState?.let { bundle ->
+            connectionStartedAt = bundle.getLong(KEY_CONNECTION_STARTED_AT, 0L)
+        }
 
         serverSource = ServerSource(this)
         appSettings = AppSettings(this)
@@ -143,6 +149,11 @@ class MainActivity : AppCompatActivity() {
         return super.onOptionsItemSelected(item)
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putLong(KEY_CONNECTION_STARTED_AT, connectionStartedAt)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         adapter.destroyAds()
@@ -173,9 +184,13 @@ class MainActivity : AppCompatActivity() {
         tunnelManager.syncStateFromBackend()
         if (tunnelManager.state == TunnelState.UP) {
             restoreConnectedServerFromSettings()
-            if (!wasConnected) {
-                startConnectionStats()
-            } else if (statsJob == null) {
+            // restoreConnectedServerFromSettings() calls startConnectionStats() internally,
+            // so don't call it again here to avoid resetting the chronometer.
+            if (!wasConnected && statsJob == null) {
+                // Edge case: tunnel is UP but restoreConnectedServerFromSettings() didn't
+                // start stats (e.g., no lastConnectedServerId). Start polling only.
+                startStatsPolling()
+            } else if (wasConnected && statsJob == null) {
                 // Was already connected before this pause -- just resume polling
                 // where it left off instead of resetting the elapsed-time display.
                 startStatsPolling()
@@ -623,7 +638,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun startConnectionStats() {
         binding.layoutConnectionStats.visibility = View.VISIBLE
-        binding.chronometerConnected.base = SystemClock.elapsedRealtime()
+        // Use persisted connection start time if available (Activity recreation),
+        // otherwise use current time (fresh connection)
+        if (connectionStartedAt == 0L) {
+            connectionStartedAt = SystemClock.elapsedRealtime()
+        }
+        binding.chronometerConnected.base = connectionStartedAt
         binding.chronometerConnected.start()
         startStatsPolling()
     }
@@ -650,6 +670,7 @@ class MainActivity : AppCompatActivity() {
         binding.textDataUsage.text = "↓0 KB ↑0 KB"
         statsJob?.cancel()
         statsJob = null
+        connectionStartedAt = 0L // Reset for next connection
     }
 
     private fun formatBytes(bytes: Long): String {
@@ -665,5 +686,6 @@ class MainActivity : AppCompatActivity() {
     companion object {
         /** How often the server list quietly refreshes itself while the app is open. */
         private const val SERVER_REFRESH_INTERVAL_MS = 20_000L
+        private const val KEY_CONNECTION_STARTED_AT = "connection_started_at"
     }
 }

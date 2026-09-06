@@ -38,7 +38,8 @@ class VpnActionReceiver : BroadcastReceiver() {
         Log.d(TAG, "onReceive: disconnect action from notification")
 
         val pendingResult = goAsync()
-        CoroutineScope(Dispatchers.IO).launch {
+        // Use a scoped coroutine tied to the BroadcastReceiver's async result
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
             try {
                 val tunnelManager = VpnTunnelManagerHolder.get(context)
                 // Do not manufacture a Tunnel object from the Android VPN UI

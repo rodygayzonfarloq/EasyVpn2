@@ -52,6 +52,11 @@ class SettingsActivity : AppCompatActivity() {
         binding.buttonSplitTunneling.setOnClickListener {
             startActivity(Intent(this, SplitTunnelActivity::class.java))
         }
+
+        binding.buttonPrivacyPolicy.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://api.fastvpnn.pp.ua/privacy.html"))
+            startActivity(intent)
+        }
     }
 
     private fun setUpThemeRadioGroup() {

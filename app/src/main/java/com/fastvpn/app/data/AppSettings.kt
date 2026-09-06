@@ -67,12 +67,26 @@ class AppSettings(context: Context) {
      *  Falls back to [serverDns] for "server" mode, and also for "custom" mode if
      *  no custom value has been saved yet (so an empty custom field never breaks
      *  the connection -- it just behaves like "server default" until filled in). */
-    fun resolveDns(serverDns: String): String = when (dnsMode) {
-        "google" -> "8.8.8.8, 8.8.4.4"
-        "cloudflare" -> "1.1.1.1, 1.0.0.1"
-        "adblock" -> "94.140.14.14, 94.140.15.15" // AdGuard DNS Default -- ad/tracker blocking, no signup needed
-        "custom" -> customDns.ifBlank { serverDns }
-        else -> serverDns
+    fun resolveDns(serverDns: String): String {
+        val resolved = when (dnsMode) {
+            "google" -> "8.8.8.8, 8.8.4.4"
+            "cloudflare" -> "1.1.1.1, 1.0.0.1"
+            "adblock" -> "94.140.14.14, 94.140.15.15" // AdGuard DNS Default -- ad/tracker blocking, no signup needed
+            "custom" -> customDns.ifBlank { serverDns }
+            else -> serverDns
+        }
+        return if (isValidDns(resolved)) resolved else serverDns
+    }
+
+    /** Validates DNS server(s) format. Accepts single IP or comma-separated IPs. */
+    private fun isValidDns(dns: String): Boolean {
+        if (dns.isBlank()) return false
+        return dns.split(",").all { entry ->
+            val trimmed = entry.trim()
+            // Simple IPv4 validation
+            val ipv4Pattern = Regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
+            ipv4Pattern.matches(trimmed)
+        }
     }
 
     /** Whether the user has accepted the Privacy Policy / Terms on the consent
