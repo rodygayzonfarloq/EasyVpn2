@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- This app never asks for location or file storage access -- it has no
+    <!-- This app never asks for location or file storage access; it has no
          feature that needs either. These explicit removals are a safety net,
          not a fix for a known problem: they guarantee the Play Console
          permissions declaration stays clean even if a future update to the
