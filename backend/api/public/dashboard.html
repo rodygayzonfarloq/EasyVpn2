@@ -158,7 +158,7 @@
     refreshTimer = setInterval(refresh, 10000);
   }
 
-  window.refresh = async function () {
+  async function refresh() {
     try {
       const resp = await fetch('/api/admin/dashboard', {
         headers: await authHeaders()
@@ -190,6 +190,7 @@
       document.getElementById('lastUpdated').textContent = 'Could not reach the API just now -- will retry.';
     }
   }
+  window.refresh = refresh;
 
   function renderDashboard(data) {
     document.getElementById('statServers').textContent = data.totalServers;
