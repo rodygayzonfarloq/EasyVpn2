@@ -207,6 +207,10 @@ outside Cloudflare, browser previews, etc).
   the existing WireGuard key and just updates that server's entry.
 - **Server list lives at** `/opt/fastvpn-api/data/servers.json` on the brain
   VPS if you ever want to hand-edit an entry (e.g. change a display name).
+  See `api/data/servers_example.json` in this repo for the expected shape —
+  it's a documentation template with placeholder values (example IP, a
+  `PASTE_VPS1_PUBLIC_KEY_HERE` stand-in), not a real server, so copy it to
+  `servers.json` and fill in real values rather than using it as-is.
 - **Server picking** is currently random among your servers. If you want
   load-based picking instead (send new users to whichever server has fewest
   registrations), that logic is one function in `api/server.js`'s

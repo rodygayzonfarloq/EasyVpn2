@@ -63,6 +63,20 @@ class AppSettings(context: Context) {
         get() = prefs.getString("custom_dns", "") ?: ""
         set(value) = prefs.edit().putString("custom_dns", value.trim()).apply()
 
+    /**
+     * Set by SettingsActivity whenever [dnsMode] or [customDns] changes. A DNS
+     * resolver is part of the WireGuard interface config, which Android can only
+     * apply by re-establishing the tunnel -- there is no way to push a new DNS
+     * server into an already-running VPN interface. Without this flag, changing
+     * the setting while connected silently does nothing until the user happens
+     * to disconnect and reconnect on their own, which looks exactly like "the
+     * setting doesn't work". MainActivity.onResume() checks this and, if a
+     * tunnel is currently up, transparently reconnects to apply it.
+     */
+    var dnsChangePendingReconnect: Boolean
+        get() = prefs.getBoolean("dns_change_pending_reconnect", false)
+        set(value) = prefs.edit().putBoolean("dns_change_pending_reconnect", value).apply()
+
     /** Resolves [dnsMode] against the connecting server's own default ([serverDns]).
      *  Falls back to [serverDns] for "server" mode, and also for "custom" mode if
      *  no custom value has been saved yet (so an empty custom field never breaks

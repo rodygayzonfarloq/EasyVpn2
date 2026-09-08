@@ -180,6 +180,7 @@ class MainActivity : AppCompatActivity() {
                 // where it left off instead of resetting the elapsed-time display.
                 startStatsPolling()
             }
+            reconnectIfDnsSettingChanged()
         } else if (wasConnected) {
             connectedServer = null
             stopConnectionStats()
@@ -188,6 +189,38 @@ class MainActivity : AppCompatActivity() {
         updateActionButton()
 
         startServerAutoRefresh()
+    }
+
+    /** Settings -> DNS is applied on the WireGuard interface at connect time, so
+     *  changing it while already connected has no effect on the running tunnel
+     *  until the connection is cycled -- see AppSettings.dnsChangePendingReconnect.
+     *  Runs a real reconnect (fresh registration + tunnel, same as switching
+     *  servers) rather than just toggling the flag, so the new resolver is
+     *  actually live afterward instead of only "will apply next time". */
+    private fun reconnectIfDnsSettingChanged() {
+        if (!appSettings.dnsChangePendingReconnect) return
+        appSettings.dnsChangePendingReconnect = false
+        val server = connectedServer ?: return
+        if (connectionFlowActive) return
+        android.widget.Toast.makeText(this, "Reconnecting to apply your new DNS setting…", android.widget.Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val result = tunnelManager.disconnect()
+            if (result.isFailure) {
+                tunnelManager.syncStateFromBackend()
+                updateStatusCard()
+                updateActionButton()
+                android.widget.Toast.makeText(
+                    this@MainActivity,
+                    "Could not reconnect to apply DNS: ${result.exceptionOrNull()?.message ?: "disconnect failed"}",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
+            releaseActiveRegistrationLease()
+            onDisconnected()
+            connectionFlowActive = true
+            beginConnection(buildFailoverChain(server))
+        }
     }
 
     /** Keeps the server list (and its ping times) current the whole time the app is
@@ -392,14 +425,19 @@ class MainActivity : AppCompatActivity() {
             }
             return
         }
-        pendingChain = buildFailoverChain(server)
+        val chain = buildFailoverChain(server)
+        pendingChain = chain
         connectionFlowActive = true
         updateActionButton()
         val intent = VpnService.prepare(this)
         if (intent != null) {
             vpnPermissionLauncher.launch(intent)
         } else {
-            beginConnection(pendingChain!!)
+            // Use the local val, not the pendingChain property: it's the same list right
+            // now, but reading it back through the mutable property would require a
+            // non-null assertion since the compiler can't prove another callback hasn't
+            // cleared it in between.
+            beginConnection(chain)
         }
     }
 
@@ -432,6 +470,35 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Everything doConnect() needs out of a successful registration call, bundled as
+     *  one immutable value instead of four separate nullable `var`s -- so the rest of
+     *  the function can use these fields directly with no null checks or `!!`. */
+    private data class Registration(
+        val server: Server,
+        val assignedAddressCidr: String,
+        val serverId: String,
+        val token: String
+    )
+
+    private suspend fun registerWithServer(server: Server): Registration {
+        val publicKey = keyStore.clientPublicKeyBase64()
+        val reg = serverSource.register(publicKey, preferredServerId = server.id)
+        if (reg.registrationToken.isNotBlank()) {
+            keyStore.addPendingRegistration(reg.serverId, reg.registrationToken)
+        }
+        return Registration(
+            server = server.copy(
+                endpointHost = reg.endpointHost,
+                endpointPort = reg.endpointPort,
+                serverPublicKey = reg.serverPublicKey,
+                dns = reg.dns
+            ),
+            assignedAddressCidr = "${reg.assignedAddress}/32",
+            serverId = reg.serverId,
+            token = reg.registrationToken
+        )
+    }
+
     private fun doConnect(chain: List<Server>, attemptIndex: Int) {
         val server = chain[attemptIndex]
         binding.textConnectionStatus.text = "Connecting…"
@@ -439,26 +506,8 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val privateKey = keyStore.clientPrivateKeyBase64()
 
-            var connectServer = server
-            var assignedAddressCidr: String? = null
-            var registrationServerId: String? = null
-            var registrationToken: String? = null
-
-            try {
-                val publicKey = keyStore.clientPublicKeyBase64()
-                val reg = serverSource.register(publicKey, preferredServerId = server.id)
-                connectServer = server.copy(
-                    endpointHost = reg.endpointHost,
-                    endpointPort = reg.endpointPort,
-                    serverPublicKey = reg.serverPublicKey,
-                    dns = reg.dns
-                )
-                assignedAddressCidr = "${reg.assignedAddress}/32"
-                registrationServerId = reg.serverId
-                registrationToken = reg.registrationToken
-                if (reg.registrationToken.isNotBlank()) {
-                    keyStore.addPendingRegistration(reg.serverId, reg.registrationToken)
-                }
+            val registration = try {
+                registerWithServer(server)
             } catch (e: Exception) {
                 tryNextOrFail(chain, attemptIndex, "Registration failed: ${e.message}")
                 return@launch
@@ -467,13 +516,13 @@ class MainActivity : AppCompatActivity() {
             // Apply the user's DNS preference (Settings -> DNS) on top of whatever
             // the server itself specifies -- "Server default" leaves connectServer.dns
             // untouched; any other mode substitutes the chosen resolver.
-            connectServer = connectServer.copy(dns = appSettings.resolveDns(connectServer.dns))
+            val connectServer = registration.server.copy(dns = appSettings.resolveDns(registration.server.dns))
 
             val result = tunnelManager.connect(
                 connectServer,
                 privateKey,
                 excludedPackages = appSettings.excludedPackages,
-                assignedAddressCidr = assignedAddressCidr!!
+                assignedAddressCidr = registration.assignedAddressCidr
             )
             result.onSuccess {
                 // The interface coming up doesn't prove it actually works -- verify
@@ -484,8 +533,13 @@ class MainActivity : AppCompatActivity() {
                     pendingChain = null
                     connectedServer = server
                     appSettings.lastConnectedServerId = server.id
-                    if (registrationServerId != null && !registrationToken.isNullOrBlank()) {
-                        keyStore.promotePendingToActive(registrationServerId!!, registrationToken!!)
+                    // This connect already used the current DNS setting (see
+                    // resolveDns() above), so any earlier pending-reconnect flag
+                    // is now moot -- clear it to avoid an unnecessary follow-up
+                    // reconnect next time onResume runs.
+                    appSettings.dnsChangePendingReconnect = false
+                    if (registration.token.isNotBlank()) {
+                        keyStore.promotePendingToActive(registration.serverId, registration.token)
                     }
                     updateStatusCard()
                     updateActionButton()
@@ -494,12 +548,12 @@ class MainActivity : AppCompatActivity() {
                     NotificationHelper.showConnected(this@MainActivity, "${server.flagEmoji()} ${server.name}")
                 } else {
                     tunnelManager.disconnect()
-                    releaseRegistrationLease(registrationServerId, registrationToken)
+                    releaseRegistrationLease(registration.serverId, registration.token)
                     tryNextOrFail(chain, attemptIndex, null)
                 }
             }
             result.onFailure {
-                releaseRegistrationLease(registrationServerId, registrationToken)
+                releaseRegistrationLease(registration.serverId, registration.token)
                 tryNextOrFail(chain, attemptIndex, "Connection failed: ${it.message}")
             }
         }
@@ -664,6 +718,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         /** How often the server list quietly refreshes itself while the app is open. */
-        private const val SERVER_REFRESH_INTERVAL_MS = 20_000L
+        private const val SERVER_REFRESH_INTERVAL_MS = 30_000L
     }
 }

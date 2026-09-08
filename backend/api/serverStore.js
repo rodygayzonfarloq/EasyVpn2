@@ -2,7 +2,10 @@
 // arrive two ways:
 //   1. Self-registration -- each VPS's setup.sh calls POST /api/admin/add-server
 //      once, automatically, during its own setup. This is the easy path.
-//   2. Manual editing of data/servers.json, for advanced/manual setups.
+//   2. Manual editing of data/servers.json, for advanced/manual setups -- see
+//      data/servers_example.json for the expected shape (placeholder IP and
+//      key, not a real server; copy it to servers.json and fill in real
+//      values for manual setups).
 // Both write to the same file, so either approach (or a mix) works.
 const fs = require('fs');
 const path = require('path');

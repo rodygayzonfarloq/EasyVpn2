@@ -100,5 +100,35 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.button.MaterialButton android:id="@+id/buttonSplitTunneling" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="16dp" android:text="Split tunneling  •  Choose apps" android:textAllCaps="false" style="@style/Widget.MaterialComponents.Button.OutlinedButton" app:cornerRadius="16dp" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp"
+            app:cardBackgroundColor="@color/cardBackground" app:cardCornerRadius="22dp" app:cardElevation="1dp" app:strokeColor="@color/divider" app:strokeWidth="1dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="About &amp; Support" android:textColor="@color/primary" android:textSize="12sp" android:textStyle="bold" android:letterSpacing="0.08" />
+
+                <LinearLayout android:id="@+id/rowPrivacyPolicy" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="14dp" android:paddingBottom="14dp" android:clickable="true" android:focusable="true" android:background="?attr/selectableItemBackground">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Privacy Policy" android:textColor="@color/black" android:textStyle="bold" android:textSize="15sp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="›" android:textColor="@color/gray" android:textSize="18sp" />
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+                <LinearLayout android:id="@+id/rowTerms" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="14dp" android:paddingBottom="14dp" android:clickable="true" android:focusable="true" android:background="?attr/selectableItemBackground">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Terms &amp; Conditions" android:textColor="@color/black" android:textStyle="bold" android:textSize="15sp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="›" android:textColor="@color/gray" android:textSize="18sp" />
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+                <LinearLayout android:id="@+id/rowContactUs" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="14dp" android:paddingBottom="4dp" android:clickable="true" android:focusable="true" android:background="?attr/selectableItemBackground">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Contact us" android:textColor="@color/black" android:textStyle="bold" android:textSize="15sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="@string/contact_email" android:textColor="@color/gray" android:textSize="12sp" />
+                    </LinearLayout>
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="›" android:textColor="@color/gray" android:textSize="18sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView android:id="@+id/textAppVersion" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:layout_gravity="center_horizontal" android:text="@string/version_footer" android:textColor="@color/gray" android:textSize="12sp" />
     </LinearLayout>
 </ScrollView>

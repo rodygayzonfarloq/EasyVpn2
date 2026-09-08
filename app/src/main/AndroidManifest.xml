@@ -6,6 +6,17 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- This app never asks for location or file storage access -- it has no
+         feature that needs either. These explicit removals are a safety net,
+         not a fix for a known problem: they guarantee the Play Console
+         permissions declaration stays clean even if a future update to the
+         ads SDK or another dependency ever merges one of these into the
+         manifest transitively, without needing to notice and catch it by hand. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
+
     <!-- Lets the app see other installed launchable apps for Split Tunneling, WITHOUT
          needing the heavily-scrutinized QUERY_ALL_PACKAGES permission (which Play Store
          requires a special justification form for). This narrower <queries> declaration
@@ -25,6 +36,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.FastVPN"
+        android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="36">
 
         <meta-data

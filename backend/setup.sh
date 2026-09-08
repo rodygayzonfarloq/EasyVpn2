@@ -93,7 +93,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 install_node_runtime() {
   if ! command -v node >/dev/null 2>&1; then
     echo "==> Installing Node.js..."
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    # Node 20 reached end-of-life in April 2026 (no more security patches).
+    # 24.x is the current Active LTS line (supported into 2028).
+    curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
     apt-get install -y nodejs
   fi
 }

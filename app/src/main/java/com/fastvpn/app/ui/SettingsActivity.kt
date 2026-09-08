@@ -1,12 +1,15 @@
 package com.fastvpn.app.ui
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.net.toUri
 import com.fastvpn.app.R
 import com.fastvpn.app.data.AppSettings
 import com.fastvpn.app.databinding.ActivitySettingsBinding
@@ -52,6 +55,51 @@ class SettingsActivity : AppCompatActivity() {
         binding.buttonSplitTunneling.setOnClickListener {
             startActivity(Intent(this, SplitTunnelActivity::class.java))
         }
+
+        setUpAboutAndSupportSection()
+    }
+
+    /** Privacy Policy and Terms open the same pages published on the backend's
+     *  public site (see backend/api/public/{privacy,terms}.html) -- one canonical
+     *  copy instead of duplicating legal text inside the app itself. Contact us
+     *  opens the user's email app pre-addressed to our support inbox. */
+    private fun setUpAboutAndSupportSection() {
+        val siteBaseUrl = settings.backendApiUrl.trimEnd('/')
+
+        binding.rowPrivacyPolicy.setOnClickListener {
+            openInBrowser("$siteBaseUrl/privacy.html")
+        }
+        binding.rowTerms.setOnClickListener {
+            openInBrowser("$siteBaseUrl/terms.html")
+        }
+        binding.rowContactUs.setOnClickListener {
+            openContactEmail()
+        }
+    }
+
+    private fun openInBrowser(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, "No browser app found to open this link", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openContactEmail() {
+        val email = getString(R.string.contact_email)
+        // ACTION_SENDTO with a mailto: Uri (rather than ACTION_SEND) targets only
+        // email apps, so this doesn't show up as an option for every share sheet
+        // handler on the device.
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("mailto:")
+            putExtra(Intent.EXTRA_EMAIL, arrayOf(email))
+            putExtra(Intent.EXTRA_SUBJECT, "FastVPN Support")
+        }
+        try {
+            startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, "No email app found — reach us at $email", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun setUpThemeRadioGroup() {
@@ -96,10 +144,18 @@ class SettingsActivity : AppCompatActivity() {
                 else -> "server"
             }
             binding.layoutCustomDns.visibility = if (checkedButtonId == R.id.radioDnsCustom) View.VISIBLE else View.GONE
+            // The new resolver only takes effect on the next connect -- if a
+            // tunnel is already up, flag it so MainActivity reconnects for us
+            // instead of the change silently doing nothing until the user
+            // happens to toggle the connection themselves.
+            settings.dnsChangePendingReconnect = true
         }
 
         binding.buttonSaveCustomDns.setOnClickListener {
             settings.customDns = binding.editCustomDns.text.toString().trim()
+            if (settings.dnsMode == "custom") {
+                settings.dnsChangePendingReconnect = true
+            }
             Toast.makeText(this, "Custom DNS saved", Toast.LENGTH_SHORT).show()
         }
     }

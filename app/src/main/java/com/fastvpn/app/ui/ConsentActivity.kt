@@ -15,8 +15,9 @@ import com.fastvpn.app.util.applyEdgeToEdgeInsets
  * access behind explicit acceptance of the Privacy Policy / Terms -- required
  * for Play Store review of any VPN app (BIND_VPN_SERVICE is a sensitive
  * permission) and for AdMob. See backend/api/public/privacy.html and
- * terms.html for the actual policy text (served at
- * https://api.fastvpnn.pp.ua/privacy.html and /terms.html).
+ * terms.html for the actual policy text -- served from AppSettings.backendApiUrl,
+ * the same configurable backend host SettingsActivity's legal links use, rather
+ * than a hardcoded domain that would silently go stale if that host ever changes.
  *
  * The close (X) button declines -- since using the app at all requires
  * accepting how it handles your traffic, declining just closes the app
@@ -24,16 +25,18 @@ import com.fastvpn.app.util.applyEdgeToEdgeInsets
  */
 class ConsentActivity : AppCompatActivity() {
 
-    private val policyUrl = "https://api.fastvpnn.pp.ua/privacy.html"
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val binding = ActivityConsentBinding.inflate(layoutInflater)
         setContentView(binding.root)
         applyEdgeToEdgeInsets(binding.root)
 
+        val siteBaseUrl = AppSettings(this).backendApiUrl.trimEnd('/')
+        binding.linkPrivacy.setOnClickListener {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$siteBaseUrl/privacy.html")))
+        }
         binding.linkTerms.setOnClickListener {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(policyUrl)))
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$siteBaseUrl/terms.html")))
         }
 
         binding.buttonClose.setOnClickListener {
