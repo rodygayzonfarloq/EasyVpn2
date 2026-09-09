@@ -134,6 +134,13 @@ async function saveRegistration(devicePublicKey, serverId, assignedAddress, regi
       registrationToken,
       createdAt: now,
       lastSeenAt: now,
+      // True only once the health sweep observes a real WireGuard handshake
+      // from this device's public key (see markConnected). A registration
+      // that stays false past PENDING_REGISTRATION_MAX_AGE_MS never actually
+      // connected -- e.g. the app crashed before establishing the tunnel, or
+      // the assigned config was never used -- and gets pruned quickly rather
+      // than sitting on a slot for 30 days like a real, previously-used peer.
+      everConnected: false,
     };
     delete store.reservations[key];
     save(store);
@@ -190,6 +197,53 @@ async function removeRegistrationByKey(devicePublicKey, serverId) {
   });
 }
 
+/** Marks a registration as having completed at least one real WireGuard
+ *  handshake -- called from the health sweep once an agent reports a
+ *  non-zero latest-handshake for this device's public key. Also refreshes
+ *  lastSeenAt, same reasoning as touchRegistration: a device that's actively
+ *  connected should never look idle to pruneStaleRegistrations even if the
+ *  app itself never calls /api/register again while connected. Idempotent
+ *  and cheap to call on every sweep -- skips the write if already true. */
+async function markConnected(devicePublicKey, serverId) {
+  return withMutationLock(() => {
+    const store = load();
+    const key = registrationKey(devicePublicKey, serverId);
+    const reg = store.registrations[key];
+    if (!reg) return false;
+    if (reg.everConnected) {
+      reg.lastSeenAt = new Date().toISOString();
+      save(store);
+      return true;
+    }
+    reg.everConnected = true;
+    reg.lastSeenAt = new Date().toISOString();
+    save(store);
+    return true;
+  });
+}
+
+/** Registrations older than maxAgeMs that have NEVER completed a real
+ *  handshake (everConnected still false). These are "stuck pending" rows --
+ *  distinct from findStaleRegistrations, which is for devices that connected
+ *  successfully at some point and have since gone quiet. Falls back to
+ *  treating rows saved before everConnected existed as already-connected
+ *  (assume they're legitimate, let the 30-day stale check handle them
+ *  instead of retroactively deleting older installs' active devices). */
+function findPendingRegistrations(maxAgeMs) {
+  const store = load();
+  const cutoff = Date.now() - maxAgeMs;
+  const pending = [];
+  for (const [key, reg] of Object.entries(store.registrations)) {
+    if (reg.everConnected !== false) continue; // true, or missing (legacy row) -- not stuck-pending
+    const created = new Date(reg.createdAt).getTime();
+    if (Number.isFinite(created) && created < cutoff) {
+      const sep = key.lastIndexOf('::');
+      pending.push({ devicePublicKey: key.slice(0, sep), serverId: key.slice(sep + 2), ...reg });
+    }
+  }
+  return pending;
+}
+
 /** Counts how many devices are registered on each server, plus the total. */
 function registrationCounts() {
   const store = load();
@@ -217,6 +271,20 @@ async function removeRegistration(devicePublicKey, serverId, registrationToken) 
   });
 }
 
+/** All registrations on one server -- used by the health sweep to
+ *  cross-reference each device's public key against the agent's handshake
+ *  report and call markConnected where appropriate. */
+function getRegistrationsByServer(serverId) {
+  const store = load();
+  const result = [];
+  for (const [key, reg] of Object.entries(store.registrations)) {
+    if (reg.serverId !== serverId) continue;
+    const sep = key.lastIndexOf('::');
+    result.push({ devicePublicKey: key.slice(0, sep), serverId: key.slice(sep + 2), ...reg });
+  }
+  return result;
+}
+
 module.exports = {
   getRegistration,
   reserveAddress,
@@ -227,4 +295,7 @@ module.exports = {
   removeRegistrationByKey,
   registrationCounts,
   removeRegistration,
+  markConnected,
+  findPendingRegistrations,
+  getRegistrationsByServer,
 };

@@ -30,6 +30,16 @@ const MAX_REGISTRATIONS_PER_SERVER = 200;
 // is idempotent), while still eventually reclaiming genuinely abandoned slots.
 const STALE_REGISTRATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+// A device that registers (reserves an IP, gets added as a WireGuard peer)
+// but never actually completes a handshake -- crashed before the tunnel came
+// up, network died mid-setup, whatever -- is "stuck pending". Unlike a
+// registration that connected once and later went idle (STALE_REGISTRATION_
+// MAX_AGE_MS, 30 days -- that's a real, previously-used device), this one
+// never worked at all, so there's no reason to hold its slot anywhere near
+// that long. Pruned within roughly this long of being created.
+const PENDING_REGISTRATION_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+const PENDING_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // check every 5 min -- fine-grained enough against a 1h cutoff
+
 // Auto-generates its own admin key on first run -- nothing to configure by
 // hand before starting this. setup.sh reads this file afterwards to show you
 // the key (and the exact command to run on each other VPS).
@@ -125,15 +135,16 @@ async function checkAgentHealth(agentUrl, agentApiKey) {
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    if (!resp.ok) return { healthy: false, peerCount: -1, activePeerCount: -1 };
+    if (!resp.ok) return { healthy: false, peerCount: -1, activePeerCount: -1, handshakes: {} };
     const body = await resp.json();
     return {
       healthy: !!body.ok,
       peerCount: body.peerCount ?? -1,
       activePeerCount: body.activePeerCount ?? -1,
+      handshakes: body.handshakes || {},
     };
   } catch (e) {
-    return { healthy: false, peerCount: -1, activePeerCount: -1 };
+    return { healthy: false, peerCount: -1, activePeerCount: -1, handshakes: {} };
   }
 }
 
@@ -151,7 +162,27 @@ const healthCache = new Map(); // serverId -> { healthy, peerCount, activePeerCo
 
 async function refreshServerHealth(server) {
   const health = await checkAgentHealth(server.agentUrl, server.agentApiKey);
-  healthCache.set(server.id, { ...health, checkedAt: Date.now() });
+  const { handshakes, ...cacheable } = health;
+  healthCache.set(server.id, { ...cacheable, checkedAt: Date.now() });
+
+  // Cross-reference this server's registered devices against the agent's
+  // per-peer handshake report -- any device with a non-zero timestamp has
+  // completed a real WireGuard handshake at least once, so it's no longer
+  // "stuck pending" even if it isn't active right now. See markConnected
+  // and PENDING_REGISTRATION_MAX_AGE_MS.
+  if (health.healthy && handshakes && Object.keys(handshakes).length > 0) {
+    const registrations = store.getRegistrationsByServer(server.id);
+    for (const reg of registrations) {
+      if (reg.everConnected) continue; // already marked, skip the write
+      const ts = handshakes[reg.devicePublicKey];
+      if (ts > 0) {
+        store.markConnected(reg.devicePublicKey, server.id).catch((err) =>
+          console.error(`Failed to mark ${server.id} device connected:`, err.message)
+        );
+      }
+    }
+  }
+
   return health;
 }
 
@@ -545,6 +576,44 @@ async function pruneStaleRegistrations() {
   }
 }
 
+// Reclaims registration slots from devices that registered (got an IP + a
+// WireGuard peer added) but never actually completed a handshake -- e.g. the
+// app crashed mid-connect, or the generated config was never used. These are
+// "stuck pending" rather than "genuinely abandoned after real use", so they
+// get pruned within roughly PENDING_REGISTRATION_MAX_AGE_MS instead of
+// waiting the full 30 days that pruneStaleRegistrations allows for a device
+// that actually connected at some point. Same remove-peer-first safety as
+// pruneStaleRegistrations below.
+async function prunePendingRegistrations() {
+  const pending = store.findPendingRegistrations(PENDING_REGISTRATION_MAX_AGE_MS);
+  if (pending.length === 0) return;
+  console.log(`Pruning ${pending.length} stuck/pending registration(s) (never connected, 1h+ old)...`);
+  const servers = serverStore.loadServers();
+  for (const reg of pending) {
+    const server = servers.find((s) => s.id === reg.serverId);
+    if (!server) {
+      await store.removeRegistrationByKey(reg.devicePublicKey, reg.serverId);
+      continue;
+    }
+    try {
+      const agentResp = await fetch(`${server.agentUrl}/remove-peer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Api-Key': server.agentApiKey },
+        body: JSON.stringify({ publicKey: reg.devicePublicKey }),
+      });
+      if (!agentResp.ok && agentResp.status !== 404) {
+        throw new Error(`agent responded ${agentResp.status}`);
+      }
+      await store.removeRegistrationByKey(reg.devicePublicKey, reg.serverId);
+      console.log(`  pruned stuck/pending registration on ${reg.serverId}`);
+    } catch (err) {
+      // Leave it for the next sweep rather than dropping the row while the
+      // real peer might still exist on an unreachable VPS.
+      console.error(`  failed to prune pending registration on ${reg.serverId}:`, err.message);
+    }
+  }
+}
+
 app.listen(PORT, HOST, () => {
   console.log(`FastVPN control API listening on ${HOST}:${PORT}`);
   console.log(`Dashboard: http://<this-server-ip>:${PORT}/`);
@@ -555,4 +624,9 @@ app.listen(PORT, HOST, () => {
   // relative to the 30-day threshold without adding meaningful load.
   setTimeout(pruneStaleRegistrations, 60_000);
   setInterval(pruneStaleRegistrations, 24 * 60 * 60 * 1000);
+
+  // Runs much sooner and much more often than the stale sweep above -- see
+  // PENDING_REGISTRATION_MAX_AGE_MS / PENDING_SWEEP_INTERVAL_MS.
+  setTimeout(prunePendingRegistrations, 60_000);
+  setInterval(prunePendingRegistrations, PENDING_SWEEP_INTERVAL_MS);
 });

@@ -63,18 +63,27 @@ app.get('/health', requireApiKey, (req, res) => {
     execFile('wg', ['show', config.wgInterface, 'latest-handshakes'], (hsErr, hsStdout) => {
       if (hsErr) {
         // Older wg-tools or a transient error -- still report peerCount.
-        return res.json({ ok: true, peerCount, activePeerCount: -1 });
+        return res.json({ ok: true, peerCount, activePeerCount: -1, handshakes: {} });
       }
       const nowSec = Math.floor(Date.now() / 1000);
-      const activePeerCount = hsStdout
-        .trim()
-        .split('\n')
-        .filter(Boolean)
+      const lines = hsStdout.trim().split('\n').filter(Boolean);
+      const activePeerCount = lines
         .filter((line) => {
           const ts = Number(line.trim().split(/\s+/)[1]);
           return ts > 0 && nowSec - ts <= ACTIVE_HANDSHAKE_WINDOW_SECONDS;
         }).length;
-      res.json({ ok: true, peerCount, activePeerCount });
+      // Full publicKey -> latest-handshake-unix-seconds map (0 = never
+      // handshaked). Unlike activePeerCount (a recency-windowed count used
+      // for the "connected now" number), this lets the control API tell
+      // whether one specific device has EVER completed a handshake, even if
+      // it isn't active right now -- see /api/admin markPendingRegistrations
+      // logic in the control API, which needs that per-peer distinction.
+      const handshakes = {};
+      for (const line of lines) {
+        const [publicKey, tsRaw] = line.trim().split(/\s+/);
+        handshakes[publicKey] = Number(tsRaw) || 0;
+      }
+      res.json({ ok: true, peerCount, activePeerCount, handshakes });
     });
   });
 });
