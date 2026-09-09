@@ -46,7 +46,7 @@ specific stage rather than assuming the whole flow needs a rewrite.
 Repeat the above, but instead of just swiping from Recents, force the
 process to die completely before testing Disconnect:
 ```
-adb shell am kill com.fastvpn.app
+adb shell am kill com.fastvpnn.app
 ```
 or, for a closer simulation of aggressive OEM battery management, disable
 battery optimization exceptions for the app and let the OS kill it under
