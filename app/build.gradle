@@ -53,6 +53,13 @@ android {
             if (hasSigningConfig) {
                 signingConfig signingConfigs.release
             }
+            // Fixes the Play Console warning "contains native code, and you've
+            // not uploaded debug symbols" -- the WireGuard tunnel library ships
+            // native .so files. FULL bundles complete debug symbols into the
+            // AAB automatically so Play Console can symbolicate native crashes/ANRs.
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
         }
         debug {
         }

@@ -107,3 +107,15 @@ jobs:
         with:
           name: FastVPN-release-aab-signed
           path: app/build/outputs/bundle/release/app-release.aab
+
+      # AGP writes this zip because of `ndk { debugSymbolLevel 'FULL' }` in
+      # app/build.gradle. It's already embedded inside the AAB above, so Play
+      # Console picks it up automatically -- this upload is just a convenience
+      # copy for local crash/ANR debugging.
+      - name: Upload native debug symbols
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: FastVPN-release-native-debug-symbols
+          path: app/build/outputs/native-debug-symbols/release/native-debug-symbols.zip
+          if-no-files-found: ignore
