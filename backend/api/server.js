@@ -165,13 +165,22 @@ async function refreshServerHealth(server) {
   const { handshakes, ...cacheable } = health;
   healthCache.set(server.id, { ...cacheable, checkedAt: Date.now() });
 
-  // Cross-reference this server's registered devices against the agent's
-  // per-peer handshake report -- any device with a non-zero timestamp has
-  // completed a real WireGuard handshake at least once, so it's no longer
-  // "stuck pending" even if it isn't active right now. See markConnected
-  // and PENDING_REGISTRATION_MAX_AGE_MS.
-  if (health.healthy && handshakes && Object.keys(handshakes).length > 0) {
+  // handshakes is only trustworthy when the agent's `wg show latest-handshakes`
+  // call itself succeeded -- the agent reports that by setting activePeerCount
+  // to a real number instead of -1 (see agent.js). If that command failed
+  // transiently, handshakes comes back as {} even though real peers likely
+  // still exist on the node, so both checks below below are gated on this to
+  // avoid mistaking "couldn't check" for "nothing is there".
+  const handshakesTrustworthy = health.healthy && health.activePeerCount !== -1 && handshakes;
+
+  if (handshakesTrustworthy) {
     const registrations = store.getRegistrationsByServer(server.id);
+
+    // Cross-reference this server's registered devices against the agent's
+    // per-peer handshake report -- any device with a non-zero timestamp has
+    // completed a real WireGuard handshake at least once, so it's no longer
+    // "stuck pending" even if it isn't active right now. See markConnected
+    // and PENDING_REGISTRATION_MAX_AGE_MS.
     for (const reg of registrations) {
       if (reg.everConnected) continue; // already marked, skip the write
       const ts = handshakes[reg.devicePublicKey];
@@ -180,6 +189,32 @@ async function refreshServerHealth(server) {
           console.error(`Failed to mark ${server.id} device connected:`, err.message)
         );
       }
+    }
+
+    // Phantom-registration cleanup: the dashboard's "X/200 slots" count is
+    // read straight from this registrations list, which is never otherwise
+    // re-verified against what WireGuard is actually running. If a node got
+    // reinstalled, had a peer removed outside the normal /api/unregister
+    // flow, or a wg-quick save silently failed, the brain can keep counting
+    // a slot that isn't real, forever, with nothing to catch it. Any
+    // registration whose public key isn't a peer key on the node at all
+    // (not even with a 0 handshake -- `wg show latest-handshakes` lists
+    // every configured peer) has no matching real peer and is safe to drop.
+    // The 3-minute grace period guards the small window between a peer
+    // being added and this sweep observing it.
+    const livePublicKeys = new Set(Object.keys(handshakes));
+    const graceMs = 3 * 60 * 1000;
+    const now = Date.now();
+    for (const reg of registrations) {
+      if (livePublicKeys.has(reg.devicePublicKey)) continue;
+      const createdMs = new Date(reg.createdAt).getTime();
+      if (Number.isFinite(createdMs) && now - createdMs < graceMs) continue;
+      store
+        .removeRegistrationByKey(reg.devicePublicKey, server.id)
+        .then((removed) => {
+          if (removed) console.log(`Reconciled ${server.id}: removed phantom registration (no matching peer on node)`);
+        })
+        .catch((err) => console.error(`Failed to reconcile phantom registration on ${server.id}:`, err.message));
     }
   }
 
