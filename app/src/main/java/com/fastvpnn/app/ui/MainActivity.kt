@@ -21,6 +21,7 @@ import com.fastvpnn.app.R
 import com.fastvpnn.app.ads.AdManager
 import com.fastvpnn.app.data.AppSettings
 import com.fastvpnn.app.data.Server
+import com.fastvpnn.app.data.ServerCache
 import com.fastvpnn.app.data.ServerSource
 import com.fastvpnn.app.databinding.ActivityMainBinding
 import com.fastvpnn.app.util.NotificationHelper
@@ -29,6 +30,7 @@ import com.fastvpnn.app.util.SecureKeyStore
 import com.fastvpnn.app.vpn.TunnelState
 import com.fastvpnn.app.vpn.VpnTunnelManager
 import com.fastvpnn.app.vpn.VpnTunnelManagerHolder
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -110,7 +112,9 @@ class MainActivity : AppCompatActivity() {
         requestNotificationPermissionIfNeeded()
         AdManager.loadBanner(binding.adContainer, this)
 
-        loadAndPing(onDone = {
+        // Pick up the fetch SplashActivity already started while its logo was
+        // showing, so this first load doesn't start the network call from zero.
+        loadAndPing(warmPrefetch = ServerCache.take(), onDone = {
             lifecycleScope.launch {
                 // Always reconcile the real WireGuard state before deciding whether to
                 // auto-connect. This prevents an Activity-startup race from launching
@@ -247,9 +251,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadAndPing(onDone: (() -> Unit)? = null) {
+    private fun loadAndPing(warmPrefetch: Deferred<List<Server>>? = null, onDone: (() -> Unit)? = null) {
         lifecycleScope.launch {
-            refreshServers(showSpinner = true)
+            refreshServers(showSpinner = true, warmPrefetch = warmPrefetch)
             onDone?.invoke()
         }
     }
@@ -263,10 +267,12 @@ class MainActivity : AppCompatActivity() {
      *  on any transient hiccup. [showSpinner] also gates whether a failure shows a
      *  toast: on for the visible pull-to-refresh/initial load, off for the silent
      *  background tick so a flaky connection doesn't nag the user every 20 seconds. */
-    private suspend fun refreshServers(showSpinner: Boolean) {
+    private suspend fun refreshServers(showSpinner: Boolean, warmPrefetch: Deferred<List<Server>>? = null) {
         if (showSpinner) binding.swipeRefresh.isRefreshing = true
         try {
-            val servers = serverSource.getServers()
+            // If Splash already started (or finished) fetching, await that instead
+            // of firing a second, redundant network call.
+            val servers = warmPrefetch?.await() ?: serverSource.getServers()
             // Carry over ping times we already measured so already-known servers
             // don't flash back to "Checking..." on every refresh.
             servers.forEach { s -> allServers.find { it.id == s.id }?.let { s.pingMs = it.pingMs } }

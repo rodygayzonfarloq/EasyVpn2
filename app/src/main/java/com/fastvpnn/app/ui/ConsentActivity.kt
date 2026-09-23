@@ -7,6 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.fastvpnn.app.ads.AdManager
 import com.fastvpnn.app.ads.AppOpenAdManager
 import com.fastvpnn.app.data.AppSettings
+import com.fastvpnn.app.data.ServerCache
 import com.fastvpnn.app.databinding.ActivityConsentBinding
 import com.fastvpnn.app.util.applyEdgeToEdgeInsets
 
@@ -47,6 +48,11 @@ class ConsentActivity : AppCompatActivity() {
             AppSettings(this).hasAcceptedTerms = true
             AppOpenAdManager.attach(application)
             AdManager.init(this)
+            // This is the one path to MainActivity that doesn't go through
+            // SplashActivity, so it's the only other place that needs to start
+            // the server prefetch -- otherwise a brand-new user's very first
+            // launch would be the one time it's skipped.
+            ServerCache.warm(this)
             startActivity(Intent(this, MainActivity::class.java))
             finish()
         }
