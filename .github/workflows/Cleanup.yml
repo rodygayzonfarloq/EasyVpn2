@@ -1,27 +1,17 @@
-name: Cleanup old workflow runs
+- name: Delete all other workflow runs
+  env:
+    GH_TOKEN: ${{ github.token }}
+  run: |
+    CURRENT_RUN="${{ github.run_id }}"
 
-on:
-  workflow_dispatch:
-
-permissions:
-  actions: write
-
-jobs:
-  cleanup:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Delete all workflow runs
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh run list \
-            --repo "${{ github.repository }}" \
-            --limit 1000 \
-            --json databaseId \
-            --jq '.[].databaseId' |
-          while read run_id; do
-            gh run delete "$run_id" \
-              --repo "${{ github.repository }}" \
-              --confirm
-          done
+    gh run list \
+      --repo "${{ github.repository }}" \
+      --limit 1000 \
+      --json databaseId \
+      --jq '.[].databaseId' |
+    while read run_id; do
+      if [ "$run_id" != "$CURRENT_RUN" ]; then
+        echo "Deleting run $run_id"
+        yes | gh run delete "$run_id" --repo "${{ github.repository }}" || true
+      fi
+    done
