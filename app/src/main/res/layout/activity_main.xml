@@ -312,7 +312,6 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:padding="9dp"
-        android:text="@string/version_footer"
         android:textColor="@color/gray"
         android:textSize="10sp" />
 </LinearLayout>

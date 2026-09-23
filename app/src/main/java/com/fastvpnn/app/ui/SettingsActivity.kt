@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.net.toUri
+import com.fastvpnn.app.BuildConfig
 import com.fastvpnn.app.R
 import com.fastvpnn.app.data.AppSettings
 import com.fastvpnn.app.databinding.ActivitySettingsBinding
@@ -27,6 +28,7 @@ class SettingsActivity : AppCompatActivity() {
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
         applyEdgeToEdgeInsets(binding.root)
+        binding.textAppVersion.text = getString(R.string.version_footer_format, BuildConfig.VERSION_NAME)
 
         settings = AppSettings(this)
 
